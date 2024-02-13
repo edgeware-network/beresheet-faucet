@@ -1,0 +1,8 @@
+[submodule "frontend"]
+	path = frontend
+	url = https://github.com/edgeware-network/beresheet-faucet-frontend.git
+	branch = main
+[submodule "backend"]
+	path = backend
+	url = https://github.com/edgeware-network/beresheet-faucet-backend.git
+	branch = main
