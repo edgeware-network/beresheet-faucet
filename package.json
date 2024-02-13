@@ -1,0 +1,48 @@
+{
+  "name": "beresheet-faucet",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "install:frontend": "yarn workspace faucet install",
+    "install:backend": "yarn workspace api install",
+    "install": "yarn install:frontend && yarn install:backend",
+    "build-frontend": "yarn workspace faucet build",
+    "copy-frontend-build": "cp -r frontend/build/* backend/dist/",
+    "copy-db": "cp -r backend/storage.db backend/dist/",
+    "build-backend": "yarn workspace api build",
+    "build": "yarn build-backend && yarn build-frontend && yarn copy-frontend-build && yarn copy-db",
+    "start:frontend": "yarn workspace faucet start",
+    "start:backend": "yarn workspace api start",
+    "start": "concurrently  --raw --kill-others \"yarn run start:backend\" \"yarn run start:frontend\""
+  },
+  "dependencies": {
+    "@vercel/node": "^3.0.17",
+    "formidable": "^3.5.1",
+    "superagent": "^8.1.2"
+  },
+  "routes": [
+    {
+      "src": "/api/faucetInfo",
+      "dest": "api/faucetInfo.ts"
+    },
+    {
+      "src": "/api/sendTokens",
+      "dest": "api/sendTokens.ts"
+    },
+    {
+      "src": "/api/testAPI",
+      "dest": "api/testAPI.ts"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "backend/src/index.ts"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "backend/dist/index.html"
+    }
+  ]
+}
