@@ -6,6 +6,7 @@ import { blake2AsU8a } from '@polkadot/util-crypto/blake2';
 import Storage from '../backend/src/storage';
 import ethereum_address from 'ethereum-address';
 import { config } from 'dotenv';
+import chainConfigs from '../backend/src/routes/chainConfigs';
 
 config();
 
@@ -22,13 +23,13 @@ function checkAndConvertEthAddressToSubstrateAddress(address: string) {
     return keyring.decodeAddress(address);
 }
 
-function changeAddressEncoding(address: string | undefined, toNetworkPrefix = 7): string | null {
+function changeAddressEncoding(address: string | undefined, networkPrefix): string | null {
     if (!address) {
         return null;
     }
 
     const pubKey = checkAndConvertEthAddressToSubstrateAddress(address);
-    const encodedAddress = keyring.encodeAddress(pubKey, toNetworkPrefix);
+    const encodedAddress = keyring.encodeAddress(pubKey, networkPrefix);
 
     if (encodedAddress === process.env.ADDRESS) {
         return null;
@@ -41,13 +42,13 @@ function checkAmount(amount: string): {
     checkAmountIsValid: boolean;
     validAmount?: number;
 } {
-    const MAX_EDG = Number(process.env.MAX_EDG) || 10;
+    const MAX_TOKEN = Number(MAX_TOKEN);
     const numericAmount = Number(amount);
 
     if (isNaN(numericAmount)) {
         return { checkAmountMessage: "Amount should be a number!", checkAmountIsValid: false };
-    } else if (numericAmount <= 0 || numericAmount > MAX_EDG) {
-        return { checkAmountMessage: `Amount should be within 0 and ${MAX_EDG}`, checkAmountIsValid: false };
+    } else if (numericAmount <= 0 || numericAmount > MAX_TOKEN) {
+        return { checkAmountMessage: `Amount should be within 0 and ${MAX_TOKEN}`, checkAmountIsValid: false };
     } else {
         return { checkAmountMessage: "Valid", checkAmountIsValid: true, validAmount: numericAmount };
     }
@@ -60,34 +61,17 @@ export default async (req: VercelRequest, res: VercelResponse) => {
 
         // Ensure address and amount are strings
         const addressParam = Array.isArray(req.query.address) ? req.query.address[0] : req.query.address;
-        const address = changeAddressEncoding(addressParam?.toString());
+        const address = changeAddressEncoding(addressParam?.toString(), networkPrefix);
 
         let { chain, amount } = req.query;
         amount = typeof amount === 'string' ? amount : "0"; // Default amount to "0" if not a string
 
-        const URL_TEST_NET = process.env.URL_TEST_NET || 'wss://beresheet.jelliedowl.net';
-        const wsProvider = new WsProvider(URL_TEST_NET);
+        const wsProvider = new WsProvider(RPC_URL);
 
-        let networkPrefix;
         chain = typeof chain === 'string' ? chain.toLowerCase() : "";
-        switch (chain) {
-            case 'polkadot':
-                networkPrefix = 0;
-                break;
-            case 'kusama':
-                networkPrefix = 2;
-                break;
-            case 'edgeware':
-                networkPrefix = 7;
-                break;
-            case 'edgeware-local':
-            case 'beresheet':
-                networkPrefix = 7;
-                break;
-            default:
-                networkPrefix = -1;
-                break;
-        }
+
+        const chainConfig = chainConfigs[chain];
+        const { TOKEN_SYMBOL, RPC_URL, TOKEN_DECIMALS, networkPrefix, MAX_TOKEN } = chainConfig;
 
         const allowed = await storage.isValid(ip, address, chain, Number(process.env.REQUEST_LIMIT) || 3);
 
@@ -110,29 +94,29 @@ export default async (req: VercelRequest, res: VercelResponse) => {
                         await storage.saveData(ip, address, chain);
                         return txHash;
                     } else {
-                        console.log(`Insufficient balance`);
+                        console.log(`Insufficient balance.`);
                         return -1;
                     }
                 }
             } catch (error) {
-                res.json({ trxHash: String(error), msg: `Something went wrong.\n Try again later` });
+                res.json({ trxHash: String(error), msg: `Something went wrong.\n Try again later.` });
                 return;
             }
         }
         if (!allowed) {
-            res.json({ trxHash: -1, msg: 'You have reached your limit for now.\n Please try again later' });
+            res.json({ trxHash: -1, msg: `You have reached your limit for now.\n Please try again later.` });
         } else {
             const { checkAmountMessage, checkAmountIsValid, validAmount } = checkAmount(amount);
             if (checkAmountIsValid) {
                 if (address && checkAddress(address, networkPrefix)[0]) {
                     const hash = await run();
                     if (hash === -1) {
-                        res.json({ trxHash: hash, msg: `Sorry! Insufficient test EDG balance in the faucet` });
+                        res.json({ trxHash: hash, msg: `Sorry! Insufficient ${TOKEN_SYMBOL} balance in the faucet.` });
                     } else {
-                        res.json({ trxHash: hash, msg: `${validAmount} tEDG transferred to ${address}` });
+                        res.json({ trxHash: hash, msg: `${validAmount} ${TOKEN_SYMBOL} transferred to ${address}.` });
                     }
                 } else {
-                    res.json({ trxHash: -1, msg: 'Address not valid against the chain' });
+                    res.json({ trxHash: -1, msg: `The address is not valid for the selected chain.` });
                 }
             } else {
                 res.status(500).send({ msg: checkAmountMessage });
